@@ -1,0 +1,31 @@
+name: DOSP Agent Autoposter
+
+on:
+  schedule:
+    - cron: "0 9,15 * * *"  # 09:00 & 15:00 UTC
+  workflow_dispatch: {}
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install
+        run: npm ci || npm i
+
+      - name: Post
+        env:
+          X_API_KEY: ${{ secrets.X_API_KEY }}
+          X_API_SECRET: ${{ secrets.X_API_SECRET }}
+          ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+          ACCESS_SECRET: ${{ secrets.ACCESS_SECRET }}
+          QUEUE_CSV: ${{ secrets.QUEUE_CSV }}
+          GAS_WEBHOOK: ${{ secrets.GAS_WEBHOOK }}
+        run: node index.js
