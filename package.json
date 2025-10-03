@@ -1,0 +1,11 @@
+{
+  "name": "dosp-agent-autoposter",
+  "version": "1.0.0",
+  "type": "module",
+  "license": "MIT",
+  "dependencies": {
+    "twitter-api-v2": "^1.16.0",
+    "node-fetch": "^3.3.2",
+    "papaparse": "^5.4.1"
+  }
+}
