@@ -2,7 +2,9 @@ name: DOSP Agent Autoposter
 
 on:
   schedule:
-    - cron: "0 9,15 * * *" # 09:00 & 15:00 UTC
+    # Läuft 2x täglich um 09:00 & 15:00 UTC
+    - cron: "0 9,15 * * *"
+  # Manuell startbar im Actions-Tab
   workflow_dispatch: {}
 
 jobs:
@@ -18,21 +20,49 @@ jobs:
         with:
           node-version: 20
 
-      - name: Install
+      - name: Install deps
         run: npm ci || npm i
 
-      # --- Diagnose-Steps ---
+      # --- Mini-Diagnose: Auth direkt gegen X prüfen ---
+      - name: Verify X auth (who am I?)
+        run: |
+          node - <<'NODE'
+          const { TwitterApi } = require('twitter-api-v2');
+          const client = new TwitterApi({
+            appKey: process.env.X_API_KEY,
+            appSecret: process.env.X_API_SECRET,
+            accessToken: process.env.ACCESS_TOKEN,
+            accessSecret: process.env.ACCESS_SECRET,
+          });
+          (async () => {
+            try {
+              const me = await client.v2.me();
+              console.log('Auth OK as', me.data.username, me.data.id);
+            } catch (e) {
+              console.error('Auth failed:', e.data || e);
+              process.exit(1);
+            }
+          })();
+          NODE
+        env:
+          X_API_KEY:     ${{ secrets.X_API_KEY }}
+          X_API_SECRET:  ${{ secrets.X_API_SECRET }}
+          ACCESS_TOKEN:  ${{ secrets.ACCESS_TOKEN }}
+          ACCESS_SECRET: ${{ secrets.ACCESS_SECRET }}
+
+      # --- Optional: Längen der Secrets (maskiert) loggen ---
       - name: Check env lengths (masked)
         run: |
           node -e "const s=n=>(process.env[n]||'').length; console.log({X_API_KEY:s('X_API_KEY'),X_API_SECRET:s('X_API_SECRET'),ACCESS_TOKEN:s('ACCESS_TOKEN'),ACCESS_SECRET:s('ACCESS_SECRET'),QUEUE_CSV:s('QUEUE_CSV'),GAS_WEBHOOK:s('GAS_WEBHOOK')});"
         env:
-          X_API_KEY: ${{ secrets.X_API_KEY }}
-          X_API_SECRET: ${{ secrets.X_API_SECRET }}
-          ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+          X_API_KEY:     ${{ secrets.X_API_KEY }}
+          X_API_SECRET:  ${{ secrets.X_API_SECRET }}
+          ACCESS_TOKEN:  ${{ secrets.ACCESS_TOKEN }}
           ACCESS_SECRET: ${{ secrets.ACCESS_SECRET }}
-          QUEUE_CSV: ${{ secrets.QUEUE_CSV }}
-          GAS_WEBHOOK: ${{ secrets.GAS_WEBHOOK }}
+          QUEUE_CSV:     ${{ secrets.QUEUE_CSV }}
+          GAS_WEBHOOK:   ${{ secrets.GAS_WEBHOOK }}
 
+      # --- Erreichbarkeit der CSV prüfen ---
       - name: Check CSV reachability
         run: |
           echo "HEAD $QUEUE_CSV"
@@ -40,20 +70,22 @@ jobs:
         env:
           QUEUE_CSV: ${{ secrets.QUEUE_CSV }}
 
+      # --- GAS Webhook kurz anpingen ---
       - name: Check GAS webhook
         run: |
           echo "GET $GAS_WEBHOOK"
-          curl -sS "$GAS_WEBHOOK"; echo
+          curl -sS "$GAS_WEBHOOK" || true
+          echo
         env:
           GAS_WEBHOOK: ${{ secrets.GAS_WEBHOOK }}
-      # --- /Diagnose-Steps ---
 
-      - name: Post
-        env:
-          X_API_KEY: ${{ secrets.X_API_KEY }}
-          X_API_SECRET: ${{ secrets.X_API_SECRET }}
-          ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
-          ACCESS_SECRET: ${{ secrets.ACCESS_SECRET }}
-          QUEUE_CSV: ${{ secrets.QUEUE_CSV }}
-          GAS_WEBHOOK: ${{ secrets.GAS_WEBHOOK }}
+      # --- Eigentlichen Post ausführen ---
+      - name: Post from queue
         run: node index.js
+        env:
+          X_API_KEY:     ${{ secrets.X_API_KEY }}
+          X_API_SECRET:  ${{ secrets.X_API_SECRET }}
+          ACCESS_TOKEN:  ${{ secrets.ACCESS_TOKEN }}
+          ACCESS_SECRET: ${{ secrets.ACCESS_SECRET }}
+          QUEUE_CSV:     ${{ secrets.QUEUE_CSV }}
+          GAS_WEBHOOK:   ${{ secrets.GAS_WEBHOOK }}
